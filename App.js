@@ -14,6 +14,7 @@ import PauseScreen from './screens/PauseScreen';
 import InstructionsScreen from './screens/InstructionsScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import StatsScreen from './screens/StatsScreen';
+import StoryLevelScreen from './screens/StoryLevelScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +32,7 @@ export default function App() {
           <Stack.Screen name="Win" component={WinScreen} />
           <Stack.Screen name="Instructions" component={InstructionsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
+          <Stack.Screen name="StoryLevels" component={StoryLevelScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GameProvider>
