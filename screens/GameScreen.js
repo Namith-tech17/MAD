@@ -29,14 +29,17 @@ export default function GameScreen({ navigation }) {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const enemyAnim = useRef(new Animated.Value(1)).current;
+  const bombAnim = useRef(new Animated.Value(1)).current;
 
+  // PLAYER ANIMATION
   const animatePlayer = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 1.25, duration: 100, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
     ]).start();
   };
 
+  // ENEMY PULSE
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -46,6 +49,17 @@ export default function GameScreen({ navigation }) {
     ).start();
   }, []);
 
+  // 💣 BOMB PULSE
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bombAnim, { toValue: 1.2, duration: 300, useNativeDriver: true }),
+        Animated.timing(bombAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  // ENEMY MOVEMENT
   useEffect(() => {
     let speed = 700;
 
@@ -137,9 +151,7 @@ export default function GameScreen({ navigation }) {
       if (cell === 2) {
         if (mode === "STORY" && !hasKey) return;
 
-        const newScore = score + 100;
-        setScore(newScore);
-
+        setScore(score + 100);
         updateStats(true);
 
         if (mode === "STORY") nextLevel();
@@ -175,29 +187,51 @@ export default function GameScreen({ navigation }) {
           <View key={y} style={{ flexDirection: 'row' }}>
             {row.map((cell, x) => {
 
-              let color = '#0a0a0a'; // path
+              let color = '#0c0c0c';
+              if (cell === 1) color = '#962727';
 
-              if (cell === 1) color = '#e2056c';
-              if (cell === 2) color = '#00ffe5';
-              if (cell === 3) color = '#ff3b3b';
-              if (cell === 4) color = '#ffd700';
-              if (cell === 5) color = '#9d00ff';
-
-              if (enemy.x === x && enemy.y === y) {
+              // 💣 TRAP
+              if (cell === 3) {
                 return (
-                  <Animated.View
-                    key={x}
-                    style={[styles.cell, styles.enemy, { transform: [{ scale: enemyAnim }] }]}
-                  />
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: bombAnim }] }]}>
+                    <Text style={styles.bombIcon}>💣</Text>
+                  </Animated.View>
                 );
               }
 
+              // 🔑 KEY
+              if (cell === 4) {
+                return (
+                  <View key={x} style={[styles.cell, styles.iconCell]}>
+                    <Text style={styles.keyIcon}>🔑</Text>
+                  </View>
+                );
+              }
+
+              // 🌀 GOAL
+              if (cell === 2) {
+                return (
+                  <View key={x} style={[styles.cell, styles.iconCell]}>
+                    <Text style={styles.goalIcon}>🌀</Text>
+                  </View>
+                );
+              }
+
+              // 👾 ENEMY
+              if (enemy.x === x && enemy.y === y) {
+                return (
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: enemyAnim }] }]}>
+                    <Text style={styles.enemyIcon}>👾</Text>
+                  </Animated.View>
+                );
+              }
+
+              // 🟢 PLAYER
               if (player.x === x && player.y === y) {
                 return (
-                  <Animated.View
-                    key={x}
-                    style={[styles.cell, styles.player, { transform: [{ scale: scaleAnim }] }]}
-                  />
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: scaleAnim }] }]}>
+                    <Text style={styles.playerIcon}>🟢</Text>
+                  </Animated.View>
                 );
               }
 
@@ -232,63 +266,71 @@ export default function GameScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
+  container: { flex: 1, backgroundColor: '#0c0c0c' },
 
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingTop: 40,
     paddingBottom: 10,
-    backgroundColor: '#0a0a0a',
-    borderBottomWidth: 1,
-    borderColor: '#00f5ff',
+    backgroundColor: '#0b0b0b',
+    borderBottomWidth: 2,
+    borderColor: '#00eaff',
   },
 
   topText: {
-    color: '#00f5ff',
+    color: '#00bcd4',
     fontWeight: 'bold',
   },
 
-  gameArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  gameArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   cell: {
     width: 50,
     height: 50,
     margin: 2,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: '#111',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0f0f0f',
   },
 
-  player: {
-    backgroundColor: '#00ff4c',
-    shadowColor: '#00ff37',
-    shadowOpacity: 1,
-    shadowRadius: 10,
+  iconCell: { justifyContent: 'center', alignItems: 'center' },
+
+  playerIcon: {
+    fontSize: 28,
+    textShadowColor: '#00eaff',
+    textShadowRadius: 12,
   },
 
-  enemy: {
-    backgroundColor: '#ff0800',
-    shadowColor: '#ff2a00',
-    shadowOpacity: 1,
-    shadowRadius: 10,
+  enemyIcon: {
+    fontSize: 28,
+    textShadowColor: '#ff00cc',
+    textShadowRadius: 10,
   },
 
-  controls: {
-    alignItems: 'center',
-    marginBottom: 20,
+  keyIcon: {
+    fontSize: 24,
+    textShadowColor: '#ffd700',
+    textShadowRadius: 10,
   },
+
+  goalIcon: {
+    fontSize: 26,
+    textShadowColor: '#00fff7',
+    textShadowRadius: 12,
+  },
+
+  bombIcon: {
+    fontSize: 26,
+    textShadowColor: '#ff3b3b',
+    textShadowRadius: 12,
+  },
+
+  controls: { alignItems: 'center', marginBottom: 20 },
 
   btn: {
     fontSize: 32,
     margin: 10,
-    color: '#00ff40',
+    color: '#00bcd4',
   },
 });
