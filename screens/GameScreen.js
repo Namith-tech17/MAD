@@ -1,15 +1,27 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import { moveSound, winSound, loseSound } from '../utils/sounds';
 import { generateMaze } from '../utils/mazeGenerator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GameContext } from '../utils/GameContext';
 
 export default function GameScreen({ navigation }) {
 
-  const { sound, difficulty, darkMode, control } = useContext(GameContext);
+  const {
+    difficulty,
+    control,
+    mode,
+    hasKey,
+    setHasKey,
+    currentLevel,
+    nextLevel
+  } = useContext(GameContext);
 
-  const [maze, setMaze] = useState(generateMaze());
+  const getMazeSize = () => {
+    if (mode === "STORY") return 5 + currentLevel;
+    return 6;
+  };
+
+  const [maze, setMaze] = useState(generateMaze(getMazeSize()));
   const [player, setPlayer] = useState({ x: 1, y: 1 });
   const [enemy, setEnemy] = useState({ x: 4, y: 2 });
   const [score, setScore] = useState(0);
@@ -17,14 +29,17 @@ export default function GameScreen({ navigation }) {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const enemyAnim = useRef(new Animated.Value(1)).current;
+  const bombAnim = useRef(new Animated.Value(1)).current;
 
+  // PLAYER ANIMATION
   const animatePlayer = () => {
     Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 1.25, duration: 100, useNativeDriver: true }),
+      Animated.timing(scaleAnim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
     ]).start();
   };
 
+  // ENEMY PULSE
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -34,11 +49,26 @@ export default function GameScreen({ navigation }) {
     ).start();
   }, []);
 
+  // 💣 BOMB PULSE
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bombAnim, { toValue: 1.2, duration: 300, useNativeDriver: true }),
+        Animated.timing(bombAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  // ENEMY MOVEMENT
   useEffect(() => {
     let speed = 700;
 
-    if (difficulty === 'Easy') speed = 1000;
-    if (difficulty === 'Hard') speed = 400;
+    if (mode === "STORY") {
+      speed = Math.max(200, 900 - currentLevel * 50);
+    } else {
+      if (difficulty === 'Easy') speed = 1000;
+      if (difficulty === 'Hard') speed = 400;
+    }
 
     const interval = setInterval(() => {
       setEnemy(prev => {
@@ -52,34 +82,26 @@ export default function GameScreen({ navigation }) {
         else if (player.y < y) y--;
 
         if (!maze[y] || maze[y][x] === undefined) return prev;
-
         if (maze[y][x] !== 1) return { x, y };
+
         return prev;
       });
     }, speed);
 
     return () => clearInterval(interval);
-  }, [player, maze, difficulty]);
+  }, [player, maze, difficulty, currentLevel, mode]);
 
   const updateStats = async (won = false) => {
     try {
       const data = await AsyncStorage.getItem('stats');
-
-      let stats = data ? JSON.parse(data) : {
-        games: 0,
-        wins: 0,
-        bestScore: 0,
-        time: 0,
-      };
+      let stats = data ? JSON.parse(data) : { games: 0, wins: 0, bestScore: 0 };
 
       stats.games += 1;
       if (won) stats.wins += 1;
       if (score > stats.bestScore) stats.bestScore = score;
 
       await AsyncStorage.setItem('stats', JSON.stringify(stats));
-    } catch (e) {
-      console.log('Stats error', e);
-    }
+    } catch (e) {}
   };
 
   const resetPosition = () => {
@@ -88,8 +110,6 @@ export default function GameScreen({ navigation }) {
   };
 
   const loseLife = () => {
-    if (sound) loseSound.play();
-
     if (lives > 1) {
       setLives(l => l - 1);
       resetPosition();
@@ -111,24 +131,41 @@ export default function GameScreen({ navigation }) {
 
     const cell = maze[y][x];
 
-    if (cell !== 1) {
-      if (sound) moveSound.play();
+    if (cell === 4) {
+      setHasKey(true);
+      maze[y][x] = 0;
+    }
 
+    if (cell === 5 && mode === "STORY" && !hasKey) return;
+
+    if (cell === 5 && mode === "STORY" && hasKey) {
+      maze[y][x] = 0;
+    }
+
+    if (cell !== 1) {
       animatePlayer();
       setPlayer({ x, y });
 
       if (cell === 3) loseLife();
 
       if (cell === 2) {
-        if (sound) winSound.play();
+        if (mode === "STORY" && !hasKey) return;
 
-        const newScore = score + 100;
-        setScore(newScore);
-
+        setScore(score + 100);
         updateStats(true);
 
-        setMaze(generateMaze());
+        if (mode === "STORY") nextLevel();
+
+        const newMaze = generateMaze(5 + currentLevel + 1);
+
+        if (mode === "STORY") {
+          newMaze[2][2] = 4;
+          newMaze[newMaze.length - 3][newMaze.length - 2] = 5;
+        }
+
+        setMaze(newMaze);
         resetPosition();
+        setHasKey(false);
       }
 
       if (x === enemy.x && y === enemy.y) loseLife();
@@ -136,61 +173,65 @@ export default function GameScreen({ navigation }) {
   };
 
   return (
-    <View style={[
-      styles.container,
-      { backgroundColor: darkMode ? '#050505' : '#ffffff' }
-    ]}>
+    <View style={styles.container}>
 
-      {/* Top Bar */}
       <View style={styles.topBar}>
-        <Text style={[styles.hudText, { color: darkMode ? '#0ff' : '#000' }]}>
-          ❤️ {lives}
-        </Text>
-
-        <Text style={[styles.hudText, { color: darkMode ? '#0ff' : '#000' }]}>
-          💰 {score}
-        </Text>
-
-        <TouchableOpacity onPress={() => navigation.navigate('Pause')}>
-          <Text style={[styles.pause, { color: darkMode ? '#fff' : '#000' }]}>
-            ⏸
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.topText}>❤️ {lives}</Text>
+        <Text style={styles.topText}>💰 {score}</Text>
+        {mode === "STORY" && <Text style={styles.topText}>🎯 {currentLevel}</Text>}
+        {mode === "STORY" && <Text style={styles.topText}>🔑 {hasKey ? "YES" : "NO"}</Text>}
       </View>
 
-      {/* Game Area */}
       <View style={styles.gameArea}>
         {maze.map((row, y) => (
           <View key={y} style={{ flexDirection: 'row' }}>
             {row.map((cell, x) => {
-              let color = '#111';
 
-              if (cell === 1) color = '#ff0055';
-              if (cell === 2) color = '#00ffcc';
-              if (cell === 3) color = '#ff3b3b';
+              let color = '#0c0c0c';
+              if (cell === 1) color = '#962727';
 
-              if (enemy.x === x && enemy.y === y) {
+              // 💣 TRAP
+              if (cell === 3) {
                 return (
-                  <Animated.View
-                    key={x}
-                    style={[
-                      styles.cell,
-                      { backgroundColor: '#ff00ff', transform: [{ scale: enemyAnim }] },
-                    ]}
-                  />
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: bombAnim }] }]}>
+                    <Text style={styles.bombIcon}>💣</Text>
+                  </Animated.View>
                 );
               }
 
+              // 🔑 KEY
+              if (cell === 4) {
+                return (
+                  <View key={x} style={[styles.cell, styles.iconCell]}>
+                    <Text style={styles.keyIcon}>🔑</Text>
+                  </View>
+                );
+              }
+
+              // 🌀 GOAL
+              if (cell === 2) {
+                return (
+                  <View key={x} style={[styles.cell, styles.iconCell]}>
+                    <Text style={styles.goalIcon}>🌀</Text>
+                  </View>
+                );
+              }
+
+              // 👾 ENEMY
+              if (enemy.x === x && enemy.y === y) {
+                return (
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: enemyAnim }] }]}>
+                    <Text style={styles.enemyIcon}>👾</Text>
+                  </Animated.View>
+                );
+              }
+
+              // 🟢 PLAYER
               if (player.x === x && player.y === y) {
                 return (
-                  <Animated.View
-                    key={x}
-                    style={[
-                      styles.cell,
-                      styles.player,
-                      { transform: [{ scale: scaleAnim }] },
-                    ]}
-                  />
+                  <Animated.View key={x} style={[styles.cell, styles.iconCell, { transform: [{ scale: scaleAnim }] }]}>
+                    <Text style={styles.playerIcon}>🟢</Text>
+                  </Animated.View>
                 );
               }
 
@@ -200,61 +241,23 @@ export default function GameScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Controls */}
-      {control === 'Buttons' ? (
-        <View style={styles.controls}>
-          <TouchableOpacity onPress={() => movePlayer('UP')}>
-            <Text style={[styles.btn, { color: darkMode ? '#fff' : '#000' }]}>⬆️</Text>
-          </TouchableOpacity>
-
-          <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity onPress={() => movePlayer('LEFT')}>
-              <Text style={[styles.btn, { color: darkMode ? '#fff' : '#000' }]}>⬅️</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => movePlayer('RIGHT')}>
-              <Text style={[styles.btn, { color: darkMode ? '#fff' : '#000' }]}>➡️</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity onPress={() => movePlayer('DOWN')}>
-            <Text style={[styles.btn, { color: darkMode ? '#fff' : '#000' }]}>⬇️</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.controls}>
-          <View style={styles.joystick}>
-            <TouchableOpacity onPress={() => movePlayer('UP')}>
-              <Text style={styles.joyBtn}>⬆️</Text>
-            </TouchableOpacity>
-
-            <View style={{ flexDirection: 'row' }}>
-              <TouchableOpacity onPress={() => movePlayer('LEFT')}>
-                <Text style={styles.joyBtn}>⬅️</Text>
-              </TouchableOpacity>
-
-              <View style={{ width: 40 }} />
-
-              <TouchableOpacity onPress={() => movePlayer('RIGHT')}>
-                <Text style={styles.joyBtn}>➡️</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity onPress={() => movePlayer('DOWN')}>
-              <Text style={styles.joyBtn}>⬇️</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Bottom */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity onPress={() => navigation.navigate('Game')}>
-          <Text style={styles.smallBtn}>🔄 Restart</Text>
+      <View style={styles.controls}>
+        <TouchableOpacity onPress={() => movePlayer('UP')}>
+          <Text style={styles.btn}>⬆️</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Stats')}>
-          <Text style={styles.smallBtn}>📊 Stats</Text>
+        <View style={{ flexDirection: 'row' }}>
+          <TouchableOpacity onPress={() => movePlayer('LEFT')}>
+            <Text style={styles.btn}>⬅️</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => movePlayer('RIGHT')}>
+            <Text style={styles.btn}>➡️</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity onPress={() => movePlayer('DOWN')}>
+          <Text style={styles.btn}>⬇️</Text>
         </TouchableOpacity>
       </View>
 
@@ -263,46 +266,71 @@ export default function GameScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#050505' },
+  container: { flex: 1, backgroundColor: '#0c0c0c' },
 
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingTop: 40,
-    backgroundColor: '#111',
+    paddingBottom: 10,
+    backgroundColor: '#0b0b0b',
+    borderBottomWidth: 2,
+    borderColor: '#00eaff',
   },
 
-  hudText: { color: '#0ff' },
-
-  pause: { color: '#fff' },
+  topText: {
+    color: '#00bcd4',
+    fontWeight: 'bold',
+  },
 
   gameArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  cell: { width: 55, height: 55, margin: 3, borderRadius: 6 },
-
-  player: { backgroundColor: '#ffff00' },
-
-  controls: { alignItems: 'center' },
-
-  btn: { fontSize: 32, color: '#fff', margin: 10 },
-
-  joystick: {
-    backgroundColor: '#111',
-    padding: 20,
-    borderRadius: 100,
-    alignItems: 'center',
+  cell: {
+    width: 50,
+    height: 50,
+    margin: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0f0f0f',
   },
 
-  joyBtn: {
+  iconCell: { justifyContent: 'center', alignItems: 'center' },
+
+  playerIcon: {
     fontSize: 28,
+    textShadowColor: '#00eaff',
+    textShadowRadius: 12,
+  },
+
+  enemyIcon: {
+    fontSize: 28,
+    textShadowColor: '#ff00cc',
+    textShadowRadius: 10,
+  },
+
+  keyIcon: {
+    fontSize: 24,
+    textShadowColor: '#ffd700',
+    textShadowRadius: 10,
+  },
+
+  goalIcon: {
+    fontSize: 26,
+    textShadowColor: '#00fff7',
+    textShadowRadius: 12,
+  },
+
+  bombIcon: {
+    fontSize: 26,
+    textShadowColor: '#ff3b3b',
+    textShadowRadius: 12,
+  },
+
+  controls: { alignItems: 'center', marginBottom: 20 },
+
+  btn: {
+    fontSize: 32,
     margin: 10,
+    color: '#00bcd4',
   },
-
-  bottomBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingBottom: 20,
-  },
-
-  smallBtn: { color: '#aaa' },
 });
