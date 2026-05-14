@@ -14,6 +14,7 @@ export default function GameScreen({ navigation }) {
   const [enemy, setEnemy] = useState({ x: 4, y: 2 });
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
+  const [timeLeft, setTimeLeft] = useState(60);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const enemyAnim = useRef(new Animated.Value(1)).current;
@@ -25,6 +26,19 @@ export default function GameScreen({ navigation }) {
     ]).start();
   };
 
+  useEffect(() => {
+  if (timeLeft <= 0) {
+    navigation.navigate('GameOver', { score });
+    return;
+  }
+
+  const timer = setInterval(() => {
+    setTimeLeft(prev => prev - 1);
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, [timeLeft]);
+  
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -150,6 +164,10 @@ export default function GameScreen({ navigation }) {
         <Text style={[styles.hudText, { color: darkMode ? '#0ff' : '#000' }]}>
           💰 {score}
         </Text>
+        <Text style={[styles.hudText, { color: darkMode ? '#0ff' : '#000' }]}>
+          ⏰ {timeLeft}
+        </Text>
+       
 
         <TouchableOpacity onPress={() => navigation.navigate('Pause')}>
           <Text style={[styles.pause, { color: darkMode ? '#fff' : '#000' }]}>
