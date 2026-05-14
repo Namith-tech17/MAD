@@ -27,6 +27,15 @@ export default function GameScreen({ navigation }) {
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
 
+  // TIMER FEATURE START
+
+const [timeLeft, setTimeLeft] = useState(60);
+const [isPaused, setIsPaused] = useState(false);
+
+const timerRef = useRef(null);
+
+// TIMER FEATURE END
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const enemyAnim = useRef(new Animated.Value(1)).current;
   const bombAnim = useRef(new Animated.Value(1)).current;
@@ -49,7 +58,41 @@ export default function GameScreen({ navigation }) {
     ).start();
   }, []);
 
-  // 💣 BOMB PULSE
+  // TIMER FEATURE START
+
+useEffect(() => {
+
+  clearInterval(timerRef.current);
+
+  if (isPaused) return;
+
+  timerRef.current = setInterval(() => {
+
+    setTimeLeft(prev => {
+
+      if (prev <= 1) {
+
+        clearInterval(timerRef.current);
+
+        updateStats(false);
+
+        navigation.navigate('GameOver', { score });
+
+        return 0;
+      }
+
+      return prev - 1;
+    });
+
+  }, 1000);
+
+  return () => clearInterval(timerRef.current);
+
+}, [isPaused, currentLevel]);
+
+// TIMER FEATURE END
+
+    // 💣 BOMB PULSE
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -154,7 +197,14 @@ export default function GameScreen({ navigation }) {
         setScore(score + 100);
         updateStats(true);
 
-        if (mode === "STORY") nextLevel();
+        if (mode === "STORY") {
+  nextLevel();
+}
+
+// TIMER FEATURE START
+setTimeLeft(60);
+// TIMER FEATURE END
+
 
         const newMaze = generateMaze(5 + currentLevel + 1);
 
@@ -172,12 +222,42 @@ export default function GameScreen({ navigation }) {
     }
   };
 
+  // TIMER FEATURE START
+
+useEffect(() => {
+  return () => {
+    clearInterval(timerRef.current);
+  };
+}, []);
+
+// TIMER FEATURE END
   return (
     <View style={styles.container}>
 
       <View style={styles.topBar}>
         <Text style={styles.topText}>❤️ {lives}</Text>
         <Text style={styles.topText}>💰 {score}</Text>
+        {/* TIMER FEATURE START */}
+
+<Text style={styles.topText}>
+  ⏰ {timeLeft}s
+</Text>
+
+<TouchableOpacity
+  onPress={() => {
+
+    setIsPaused(true);
+
+    navigation.navigate('Pause', {
+      resumeGame: () => setIsPaused(false),
+    });
+
+  }}
+>
+  <Text style={styles.topText}>⏸</Text>
+</TouchableOpacity>
+
+{/* TIMER FEATURE END */}
         {mode === "STORY" && <Text style={styles.topText}>🎯 {currentLevel}</Text>}
         {mode === "STORY" && <Text style={styles.topText}>🔑 {hasKey ? "YES" : "NO"}</Text>}
       </View>
