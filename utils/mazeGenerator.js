@@ -41,7 +41,7 @@ export const generateMaze = (size = 6) => {
 
       for (let x = 0; x < size; x++) {
         if (y === 0 || x === 0 || y === size - 1 || x === size - 1) {
-          row.push(1); // wall border
+          row.push(1);
         } else {
           let rand = Math.random();
           if (rand < 0.2) row.push(1);
@@ -53,17 +53,40 @@ export const generateMaze = (size = 6) => {
       maze.push(row);
     }
 
-    // start & goal
-    maze[1][1] = 0;
-    maze[size - 2][size - 2] = 2;
+    // ✅ START
+    const start = { x: 1, y: 1 };
+    maze[start.y][start.x] = 0;
 
-    // ✅ CHECK PATH
-    const valid = isPathValid(
-      maze,
-      { x: 1, y: 1 },
-      { x: size - 2, y: size - 2 }
-    );
+    // ✅ EXIT
+    const exit = { x: size - 2, y: size - 2 };
+    maze[exit.y][exit.x] = 2;
 
-    if (valid) return maze; // only return solvable maze
+    // 🔑 KEY
+    const keyPos = { x: 2, y: 2 };
+    maze[keyPos.y][keyPos.x] = 4;
+
+    // 🚪 DOOR (right before exit)
+    const doorPos = { x: size - 3, y: size - 2 };
+    maze[doorPos.y][doorPos.x] = 5;
+
+    // 🔒 FORCE EXIT TO HAVE ONLY ONE ENTRY (FROM DOOR)
+    // Block top
+    if (maze[exit.y - 1]) maze[exit.y - 1][exit.x] = 1;
+
+    // Block left EXCEPT door
+    if (maze[exit.y][exit.x - 1] !== 5) {
+      maze[exit.y][exit.x - 1] = 1;
+    }
+
+    // Bottom & right already walls
+
+    // ✅ PATH CHECKS
+    const pathToKey = isPathValid(maze, start, keyPos);
+    const pathToDoor = isPathValid(maze, keyPos, doorPos);
+    const pathToExit = isPathValid(maze, doorPos, exit);
+
+    if (pathToKey && pathToDoor && pathToExit) {
+      return maze;
+    }
   }
 };
